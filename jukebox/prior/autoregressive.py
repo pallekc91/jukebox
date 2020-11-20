@@ -7,20 +7,53 @@ from jukebox.transformer.ops import filter_logits
 from jukebox.transformer.transformer import Transformer
 from jukebox.utils.logger import get_range
 from jukebox.utils.torch_utils import empty_cache
+from jukebox.vqvae.encdec import EncoderConvBlock
+
 
 def get_normal(*shape, std=0.01):
     w = t.empty(shape)
     nn.init.normal_(w, std=std)
     return w
 
+
 def roll(x, n):
     return t.cat((x[:, -n:], x[:, :-n]), dim=1)
+
 
 def split_chunks(length, chunk_size):
     n_passes = (length + chunk_size - 1) // chunk_size
     chunk_sizes = [*[chunk_size] * (n_passes - 1), (length - 1) % chunk_size + 1]
     assert sum(chunk_sizes) == length
     return chunk_sizes
+
+def get_midi_chunk(y_info) -> object:
+    #from Yousif
+    pass
+
+class MidiEmbedding(nn.Module):
+    def __init__(self, out_shape):
+        super().__init__()
+        self.output_emb_width = out_shape
+        self.input_emb_width = 127  #should be the fixed size of number of notes in  midi
+        self.down_t = 4  # number of conv+reset blocks you need in the encoder conv block
+        self.stride_t = 3  # strides for conv
+        self.width = 2048  # dimentions of the intermediate representation inside EncoderConvBlock
+        self.depth = 48  # depth of the intermediate representation inside EncoderConvBlock
+        self.m_conv = 1.0  # keeping it default, its a parameter for resent
+        # thing to remember is this is a 1d conv thats happening. So its important to flatten the input
+        # before sending it to encoder conv bloc
+        # have a 2D conv to convert the 2D midi to 1D dimension
+
+        #send it to enc conv block, input_emb_width is always 1
+        self.encConv1d = EncoderConvBlock(input_emb_width=self.input_emb_width, output_emb_width=self.output_emb_width,
+                                     down_t=self.down_t,
+                                     stride_t=self.stride_t, width=self.width, depth=self.depth, m_conv=self.m_conv)
+
+    def forward(self, y_info):
+        # you get y info, use that info to get the midi repr
+        x = get_midi_chunk(y_info) # returns midi in the shape of batch_size, notes(channels), time
+        x = self.encConv1d(x)
+        return x
 
 class PositionEmbedding(nn.Module):
     def __init__(self, input_shape, width, init_scale=1.0, pos_init=False):
@@ -40,10 +73,11 @@ class PositionEmbedding(nn.Module):
 
     def forward(self):
         if self.pos_init:
-            pos_emb = sum([self._pos_embs[i](self.pos[:,i]) for i in range(len(self.input_shape))])
+            pos_emb = sum([self._pos_embs[i](self.pos[:, i]) for i in range(len(self.input_shape))])
         else:
             pos_emb = self.pos_emb
         return pos_emb
+
 
 class ConditionalAutoregressive2D(nn.Module):
     def __init__(self, input_shape, bins,
@@ -70,6 +104,9 @@ class ConditionalAutoregressive2D(nn.Module):
         if not y_cond:
             self.start_token = nn.Parameter(get_normal(1, width, std=0.01 * init_scale))
 
+        # Midi embedding
+        self.midi_emb = MidiEmbedding(out_shape=self.width)
+
         self.pos_emb = PositionEmbedding(input_shape=input_shape, width=width, init_scale=init_scale, pos_init=pos_init)
         self.pos_emb_dropout = nn.Dropout(emb_dropout)
 
@@ -78,7 +115,8 @@ class ConditionalAutoregressive2D(nn.Module):
                                        afn='quick_gelu', scale=True, mask=mask,
                                        zero_out=zero_out, init_scale=init_scale, res_scale=res_scale,
                                        m_attn=m_attn, m_mlp=m_mlp,
-                                       checkpoint_attn=checkpoint_attn, checkpoint_mlp=checkpoint_mlp, checkpoint_res=checkpoint_res,
+                                       checkpoint_attn=checkpoint_attn, checkpoint_mlp=checkpoint_mlp,
+                                       checkpoint_res=checkpoint_res,
                                        attn_order=attn_order, blocks=blocks, spread=spread,
                                        encoder_dims=encoder_dims, prime_len=prime_len)
 
@@ -108,12 +146,12 @@ class ConditionalAutoregressive2D(nn.Module):
         # Convert back from NL and long to NHWC
         N = x.shape[0]
         assert (0 <= x).all() and (x < self.bins).all()
-        if sample_tokens is None or sample_tokens==self.input_dims:
+        if sample_tokens is None or sample_tokens == self.input_dims:
             return x.view(N, *self.input_shape)
         else:
             return x.view(N, -1)
 
-    def forward(self, x, x_cond=None, y_cond=None, encoder_kv=None, fp16=False, loss_full=False,
+    def forward(self, x, x_cond=None, y_cond=None, encoder_kv=None, fp16=False, loss_full=False, y=None,
                 encode=False, get_preds=False, get_acts=False, get_sep_loss=False):
         # Preprocess.
         with t.no_grad():
@@ -131,29 +169,34 @@ class ConditionalAutoregressive2D(nn.Module):
 
         if self.x_cond:
             assert x_cond is not None
-            assert x_cond.shape == (N, D, self.width) or x_cond.shape == (N, 1, self.width), f"{x_cond.shape} != {(N, D, self.width)} nor {(N, 1, self.width)}. Did you pass the correct --sample_length?"
+            assert x_cond.shape == (N, D, self.width) or x_cond.shape == (N, 1,
+                                                                          self.width), f"{x_cond.shape} != {(N, D, self.width)} nor {(N, 1, self.width)}. Did you pass the correct --sample_length?"
         else:
             assert x_cond is None
             x_cond = t.zeros((N, 1, self.width), device=x.device, dtype=t.float)
 
-        x_t = x # Target
-        x = self.x_emb(x) # X emb
-        x = roll(x, 1) # Shift by 1, and fill in start token
+        x_t = x  # Target
+        x = self.x_emb(x)  # X emb
+        x = roll(x, 1)  # Shift by 1, and fill in start token
         if self.y_cond:
-            x[:,0] = y_cond.view(N, self.width)
+            x[:, 0] = y_cond.view(N, self.width)
         else:
-            x[:,0] = self.start_token
+            x[:, 0] = self.start_token
 
-        x = self.x_emb_dropout(x) + self.pos_emb_dropout(self.pos_emb()) + x_cond # Pos emb and dropout
+        # TODO: Add the midi_cond to the x
+        assert y is not None, 'Y is none, cant embed midi'
+        midi_cond = self.midi_emb(y)
 
-        x = self.transformer(x, encoder_kv=encoder_kv, fp16=fp16) # Transformer
-        if self.add_cond_after_transformer: # Piped doesnt add x_cond
+        x = self.x_emb_dropout(x) + self.pos_emb_dropout(self.pos_emb()) + x_cond  # Pos emb and dropout
+
+        x = self.transformer(x, encoder_kv=encoder_kv, fp16=fp16)  # Transformer
+        if self.add_cond_after_transformer:  # Piped doesnt add x_cond
             x = x + x_cond
 
         acts = x
         if self.only_encode:
             return x
-        x = self.x_out(x) # Predictions
+        x = self.x_out(x)  # Predictions
 
         if get_sep_loss:
             assert self.prime_len is not None
@@ -163,7 +206,7 @@ class ConditionalAutoregressive2D(nn.Module):
             prime_loss = F.cross_entropy(x_prime, x_t[:, :self.prime_len].reshape(-1)) / np.log(2.)
             gen_loss = F.cross_entropy(x_gen, x_t[:, self.prime_len:].reshape(-1)) / np.log(2.)
 
-            loss = (prime_loss, gen_loss) # Note order! Prime is first
+            loss = (prime_loss, gen_loss)  # Note order! Prime is first
         else:
             loss = F.cross_entropy(x.view(-1, self.bins), x_t.view(-1)) / np.log(2.)  # Loss
 
@@ -200,7 +243,7 @@ class ConditionalAutoregressive2D(nn.Module):
                get_preds=False, sample_tokens=None):
         assert self.training == False
 
-        if sample_tokens is None: sample_tokens=self.input_dims
+        if sample_tokens is None: sample_tokens = self.input_dims
         N, D = n_samples, self.input_dims
         if self.y_cond:
             assert y_cond is not None
@@ -210,7 +253,8 @@ class ConditionalAutoregressive2D(nn.Module):
 
         if self.x_cond:
             assert x_cond is not None
-            assert x_cond.shape == (N, D, self.width) or x_cond.shape == (N, 1, self.width), f"Got {x_cond.shape}, expected ({N}, {D}/{1}, {self.width})"
+            assert x_cond.shape == (N, D, self.width) or x_cond.shape == (
+            N, 1, self.width), f"Got {x_cond.shape}, expected ({N}, {D}/{1}, {self.width})"
         else:
             assert x_cond is None
             x_cond = t.zeros((N, 1, self.width), dtype=t.float).cuda()
@@ -222,17 +266,17 @@ class ConditionalAutoregressive2D(nn.Module):
             for sample_t in get_range(range(0, sample_tokens)):
                 x, cond = self.get_emb(sample_t, n_samples, x, x_cond, y_cond)
                 self.transformer.check_cache(n_samples, sample_t, fp16)
-                x = self.transformer(x, encoder_kv=encoder_kv, sample=True, fp16=fp16) # Transformer
+                x = self.transformer(x, encoder_kv=encoder_kv, sample=True, fp16=fp16)  # Transformer
                 if self.add_cond_after_transformer:
                     x = x + cond
                 assert x.shape == (n_samples, 1, self.width)
-                x = self.x_out(x) # Predictions
+                x = self.x_out(x)  # Predictions
                 if get_preds:
                     preds.append(x.clone())
                 # Adjust logits
                 x = x / temp
                 x = filter_logits(x, top_k=top_k, top_p=top_p)
-                x = t.distributions.Categorical(logits=x).sample() # Sample and replace x
+                x = t.distributions.Categorical(logits=x).sample()  # Sample and replace x
                 assert x.shape == (n_samples, 1)
                 xs.append(x.clone())
 
@@ -252,7 +296,7 @@ class ConditionalAutoregressive2D(nn.Module):
                       top_p=0.0, get_preds=False, chunk_size=None, sample_tokens=None):
         assert self.training == False
 
-        if sample_tokens is None: sample_tokens=self.input_dims
+        if sample_tokens is None: sample_tokens = self.input_dims
         # Preprocess.
         with t.no_grad():
             x = self.preprocess(x)
@@ -272,7 +316,8 @@ class ConditionalAutoregressive2D(nn.Module):
 
         if self.x_cond:
             assert x_cond is not None
-            assert x_cond.shape == (N, D, self.width) or x_cond.shape == (N, 1, self.width), f"Got {x_cond.shape}, expected ({N}, {D}/{1}, {self.width})"
+            assert x_cond.shape == (N, D, self.width) or x_cond.shape == (
+            N, 1, self.width), f"Got {x_cond.shape}, expected ({N}, {D}/{1}, {self.width})"
         else:
             assert x_cond is None
             x_cond = t.zeros((N, 1, self.width), dtype=t.float).cuda()
@@ -285,7 +330,7 @@ class ConditionalAutoregressive2D(nn.Module):
             # We do so in chunks instead of doing the whole past in one forward pass to reduce max memory usage.
             if chunk_size is None:
                 chunk_size = len(xs)
-            #assert len(xs) % chunk_size == 0, f'expected {len(xs)} to be divisible by {chunk_size}'
+            # assert len(xs) % chunk_size == 0, f'expected {len(xs)} to be divisible by {chunk_size}'
             chunk_sizes = split_chunks(len(xs), chunk_size)
             x_primes = []
             start = 0
@@ -332,17 +377,17 @@ class ConditionalAutoregressive2D(nn.Module):
             for sample_t in get_range(range(len(xs), sample_tokens)):
                 x, cond = self.get_emb(sample_t, n_samples, x, x_cond, y_cond)
                 self.transformer.check_cache(n_samples, sample_t, fp16)
-                x = self.transformer(x, encoder_kv=encoder_kv, sample=True, fp16=fp16) # Transformer
+                x = self.transformer(x, encoder_kv=encoder_kv, sample=True, fp16=fp16)  # Transformer
                 if self.add_cond_after_transformer:
                     x = x + cond
                 assert x.shape == (n_samples, 1, self.width)
-                x = self.x_out(x) # Predictions
+                x = self.x_out(x)  # Predictions
                 if get_preds:
                     preds.append(x)
                 # Adjust logits
                 x = x / temp
                 x = filter_logits(x, top_k=top_k, top_p=top_p)
-                x = t.distributions.Categorical(logits=x).sample() # Sample and replace x
+                x = t.distributions.Categorical(logits=x).sample()  # Sample and replace x
                 assert x.shape == (n_samples, 1)
                 xs.append(x.clone())
 
@@ -360,7 +405,7 @@ class ConditionalAutoregressive2D(nn.Module):
 
     def check_sample(self, chunk_size):
         bs, l, d = (4, self.input_dims, self.width)
-        prime = int(self.input_dims//8*7)
+        prime = int(self.input_dims // 8 * 7)
         enc_l = self.encoder_dims
         with t.no_grad():
             y_cond = t.randn(bs, 1, d).cuda() if self.y_cond else None
@@ -372,17 +417,18 @@ class ConditionalAutoregressive2D(nn.Module):
             max_err = t.max(t.abs(preds_sample - preds_forw))
             assert max_err <= 1e-6, f"Max err is {max_err} {[i for i in range(l) if t.max(t.abs(preds_sample - preds_forw)[:, i, :]) > 1e-6]}"
 
-            x_prime = x.view(bs, -1)[:,:prime]
+            x_prime = x.view(bs, -1)[:, :prime]
             # unchunked
             x, preds_sample = self.primed_sample(bs, x_prime.clone(), x_cond, y_cond, encoder_kv, get_preds=True)
-            assert (x.view(bs, -1)[:,:prime] == x_prime).all(), "Priming samples don't match"
+            assert (x.view(bs, -1)[:, :prime] == x_prime).all(), "Priming samples don't match"
             loss, preds_forw = self.forward(x, x_cond, y_cond, encoder_kv, get_preds=True)
             max_err = t.max(t.abs(preds_sample - preds_forw))
             assert max_err <= 1e-6, f"Max err is {max_err} {[i for i in range(l) if t.max(t.abs(preds_sample - preds_forw)[:, i, :]) > 1e-6]}"
 
             # chunked
-            x, preds_sample = self.primed_sample(bs, x_prime.clone(), x_cond, y_cond, encoder_kv, get_preds=True, chunk_size=chunk_size)
-            assert (x.view(bs, -1)[:,:prime] == x_prime).all(), "Priming samples don't match"
+            x, preds_sample = self.primed_sample(bs, x_prime.clone(), x_cond, y_cond, encoder_kv, get_preds=True,
+                                                 chunk_size=chunk_size)
+            assert (x.view(bs, -1)[:, :prime] == x_prime).all(), "Priming samples don't match"
             loss, preds_forw = self.forward(x, x_cond, y_cond, encoder_kv, get_preds=True)
             max_err = t.max(t.abs(preds_sample - preds_forw))
             assert max_err <= 1e-6, f"Max err is {max_err} {[i for i in range(l) if t.max(t.abs(preds_sample - preds_forw)[:, i, :]) > 1e-6]}"
@@ -395,7 +441,7 @@ def test_prior(input_shape, encoder_dims, blocks, heads, chunk_size):
     prime_len = encoder_dims
     for x_cond in [True, False]:
         for y_cond in [True, False]:
-            for attn_order in [0,2,6,12]:
+            for attn_order in [0, 2, 6, 12]:
                 prior = ConditionalAutoregressive2D(input_shape, bins,
                                                     width=width, depth=depth, heads=heads,
                                                     attn_order=attn_order, blocks=blocks,
@@ -411,6 +457,7 @@ def test_prior(input_shape, encoder_dims, blocks, heads, chunk_size):
 
 if __name__ == '__main__':
     from jukebox.utils.dist_utils import setup_dist_from_mpi
+
     setup_dist_from_mpi(port=29600)
     test_cases = [
         ((6144,), 384, 64, 2, 23),

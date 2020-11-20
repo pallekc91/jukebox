@@ -4,14 +4,14 @@ import torch
 import jukebox.utils.dist_adapter as dist
 
 def print_once(msg):
-    if (not dist.is_available()) or dist.get_rank()==0:
-        print(msg)
+    #if (not dist.is_available()) or dist.get_rank()==0:
+    print(msg)
 
 def print_all(msg):
-    if (not dist.is_available()):
-        print(msg)
-    elif dist.get_rank()%8==0:
-        print(f'{dist.get_rank()//8}: {msg}')
+    #if (not dist.is_available()):
+    print(msg)
+    #elif dist.get_rank()%8==0:
+    #    print(f'{dist.get_rank()//8}: {msg}')
 
 def allgather(x):
     xs = [torch.empty_like(x) for _ in range(dist.get_world_size())]
@@ -57,10 +57,13 @@ def setup_dist_from_mpi(
         return mpi_rank, local_rank, device
 
 def _setup_dist_from_mpi(master_addr, backend, port, n_attempts, verbose):
-    from mpi4py import MPI  # This must be imported in order to get e   rrors from all ranks to show up
+#    from mpi4py import MPI  # This must be imported in order to get e   rrors from all ranks to show up
 
-    mpi_rank = MPI.COMM_WORLD.Get_rank()
-    mpi_size = MPI.COMM_WORLD.Get_size()
+    #mpi_rank = MPI.COMM_WORLD.Get_rank()
+    #mpi_size = MPI.COMM_WORLD.Get_size()
+
+    mpi_rank = 0
+    mpi_size = 1
 
 
     os.environ["RANK"] = str(mpi_rank)

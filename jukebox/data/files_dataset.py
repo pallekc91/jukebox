@@ -39,7 +39,8 @@ class FilesAudioDataset(Dataset):
         # Load list of files and starts/durations
         files = librosa.util.find_files(f'{hps.audio_files_dir}', ['mp3', 'opus', 'm4a', 'aac', 'wav'])
         print_all(f"Found {len(files)} files. Getting durations")
-        cache = dist.get_rank() % 8 == 0 if dist.is_available() else True
+        #cache = dist.get_rank() % 8 == 0 if dist.is_available() else True
+        cache = True
         durations = np.array([get_duration_sec(file, cache=cache) * self.sr for file in files])  # Could be approximate
         self.filter(files, durations)
 
@@ -48,10 +49,16 @@ class FilesAudioDataset(Dataset):
 
     def get_index_offset(self, item):
         # For a given dataset item and shift, return song index and offset within song
+        print('item:', item)
         half_interval = self.sample_length//2
         shift = np.random.randint(-half_interval, half_interval) if self.aug_shift else 0
         offset = item * self.sample_length + shift # Note we centred shifts, so adding now
         midpoint = offset + half_interval
+        print('item:', item)
+        print('half_interval:', half_interval)
+        print('shift:', shift)
+        print('offset:', offset)
+        print('midpoint:', midpoint)
         assert 0 <= midpoint < self.cumsum[-1], f'Midpoint {midpoint} of item beyond total length {self.cumsum[-1]}'
         index = np.searchsorted(self.cumsum, midpoint)  # index <-> midpoint of interval lies in this song
         start, end = self.cumsum[index - 1] if index > 0 else 0.0, self.cumsum[index] # start and end of current song
@@ -75,7 +82,7 @@ class FilesAudioDataset(Dataset):
             example, ("unknown", "classical", "") could be a metadata for a
             piano piece.
         """
-        return None, None, None
+        return 'Artist1', 'Genre1', ''
 
     def get_song_chunk(self, index, offset, test=False):
         filename, total_length = self.files[index], self.durations[index]

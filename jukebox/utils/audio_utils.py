@@ -22,7 +22,8 @@ class STFTValues:
 def calculate_bandwidth(dataset, hps, duration=600):
     hps = DefaultSTFTValues(hps)
     n_samples = int(dataset.sr * duration)
-    l1, total, total_sq, n_seen, idx = 0.0, 0.0, 0.0, 0.0, dist.get_rank()
+    #l1, total, total_sq, n_seen, idx = 0.0, 0.0, 0.0, 0.0, dist.get_rank()
+    l1, total, total_sq, n_seen, idx = 0.0, 0.0, 0.0, 0.0, 0
     spec_norm_total, spec_nelem = 0.0, 0.0
     while n_seen < n_samples:
         x = dataset[idx]
@@ -37,16 +38,17 @@ def calculate_bandwidth(dataset, hps, duration=600):
         l1 += np.sum(np.abs(samples))
         total += np.sum(samples)
         total_sq += np.sum(samples ** 2)
-        idx += max(16, dist.get_world_size())
-
-    if dist.is_available():
-        from jukebox.utils.dist_utils import allreduce
-        n_seen = allreduce(n_seen)
-        total = allreduce(total)
-        total_sq = allreduce(total_sq)
-        l1 = allreduce(l1)
-        spec_nelem = allreduce(spec_nelem)
-        spec_norm_total = allreduce(spec_norm_total)
+        idx = max(16, 1)
+        #idx += max(16, dist.get_world_size())
+    #
+    # if dist.is_available():
+    #     from jukebox.utils.dist_utils import allreduce
+    #     n_seen = allreduce(n_seen)
+    #     total = allreduce(total)
+    #     total_sq = allreduce(total_sq)
+    #     l1 = allreduce(l1)
+    #     spec_nelem = allreduce(spec_nelem)
+    #     spec_norm_total = allreduce(spec_norm_total)
 
     mean = total / n_seen
     bandwidth = dict(l2 = total_sq / n_seen - mean ** 2,

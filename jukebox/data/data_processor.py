@@ -19,7 +19,8 @@ class OffsetDataset(Dataset):
         return self.end - self.start
 
     def __getitem__(self, item):
-        return self.dataset.get_item(self.start + item, test=self.test)
+        #HACK
+        return self.dataset.get_item([self.start] + item, test=self.test)
 
 class DataProcessor():
     def __init__(self, hps):
@@ -32,8 +33,9 @@ class DataProcessor():
         self.print_stats(hps)
 
     def set_epoch(self, epoch):
-        self.train_sampler.set_epoch(epoch)
-        self.test_sampler.set_epoch(epoch)
+        if dist.is_available():
+            self.train_sampler.set_epoch(epoch)
+            self.test_sampler.set_epoch(epoch)
 
     def create_datasets(self, hps):
         train_len = int(len(self.dataset) * hps.train_test_split)
@@ -45,8 +47,8 @@ class DataProcessor():
             self.train_sampler = BatchSampler(RandomSampler(self.train_dataset), batch_size=hps.bs, drop_last=True)
             self.test_sampler = BatchSampler(RandomSampler(self.test_dataset), batch_size=hps.bs, drop_last=True)
         else:
-            self.train_sampler = DistributedSampler(self.train_dataset)
-            self.test_sampler = DistributedSampler(self.test_dataset)
+           self.train_sampler = DistributedSampler(self.train_dataset)
+           self.test_sampler = DistributedSampler(self.test_dataset)
 
     def create_data_loaders(self, hps):
         # Loader to load mini-batches

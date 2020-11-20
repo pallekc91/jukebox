@@ -325,11 +325,11 @@ class SimplePrior(nn.Module):
             prime = z[:,:self.n_tokens]
         if self.single_enc_dec:
             z, x_cond = self.prior_preprocess([prime, z], [None, x_cond])
-            (prime_loss, gen_loss), preds = self.prior(z, x_cond, y_cond, fp16=fp16, get_sep_loss=True, get_preds=get_preds)
+            (prime_loss, gen_loss), preds = self.prior(z, x_cond, y_cond, y=y, fp16=fp16, get_sep_loss=True, get_preds=get_preds)
         else:
             encoder_kv = self.get_encoder_kv(prime, fp16=fp16)
             prime_loss = self.get_prime_loss(encoder_kv, prime)
-            gen_loss, preds = self.prior(z, x_cond, y_cond, encoder_kv, fp16=fp16, get_preds=get_preds)
+            gen_loss, preds = self.prior(z, x_cond, y_cond, encoder_kv, y=y, fp16=fp16, get_preds=get_preds)
         loss = (self.prime_loss_fraction*prime_loss*self.prime_loss_dims/self.total_loss_dims) + \
                    (gen_loss*self.gen_loss_dims/self.total_loss_dims)
         metrics=dict(bpd=gen_loss.clone().detach(), prime_loss=prime_loss.clone().detach(),

@@ -293,9 +293,12 @@ def train(model, orig_model, opt, shd, scalar, ema, logger, metrics, data_proces
 
 def run(hps="teeny", port=29500, **kwargs):
     from jukebox.utils.dist_utils import setup_dist_from_mpi
-    rank, local_rank, device = setup_dist_from_mpi(port=port)
+    #rank, local_rank, device = setup_dist_from_mpi(port=port)
+    rank, local_rank, device = 0, 0, 'cpu'
     hps = setup_hparams(hps, kwargs)
-    hps.ngpus = dist.get_world_size()
+    #hps.ngpus = dist.get_world_size()
+    hps.ngpus = 0
+    hps.nworkers = 0
     hps.argv = " ".join(sys.argv)
     hps.bs_sample = hps.nworkers = hps.bs
 
@@ -315,7 +318,7 @@ def run(hps="teeny", port=29500, **kwargs):
     # Setup opt, ema and distributed_model.
     opt, shd, scalar = get_optimizer(model, hps)
     ema = get_ema(model, hps)
-    distributed_model = get_ddp(model, hps)
+    #distributed_model = get_ddp(model, hps)
 
     logger, metrics = init_logging(hps, local_rank, rank)
     logger.iters = model.step
@@ -325,7 +328,7 @@ def run(hps="teeny", port=29500, **kwargs):
         metrics.reset()
         data_processor.set_epoch(epoch)
         if hps.train:
-            train_metrics = train(distributed_model, model, opt, shd, scalar, ema, logger, metrics, data_processor, hps)
+            train_metrics = train(model, model, opt, shd, scalar, ema, logger, metrics, data_processor, hps)
             train_metrics['epoch'] = epoch
             if rank == 0:
                 print('Train',' '.join([f'{key}: {val:0.4f}' for key,val in train_metrics.items()]))
@@ -333,7 +336,7 @@ def run(hps="teeny", port=29500, **kwargs):
 
         if hps.test:
             if ema: ema.swap()
-            test_metrics = evaluate(distributed_model, model, logger, metrics, data_processor, hps)
+            test_metrics = evaluate(model, model, logger, metrics, data_processor, hps)
             test_metrics['epoch'] = epoch
             if rank == 0:
                 print('Ema',' '.join([f'{key}: {val:0.4f}' for key,val in test_metrics.items()]))
