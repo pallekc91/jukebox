@@ -6,9 +6,11 @@ from torch.utils.data import Dataset
 from jukebox.utils.dist_utils import print_all
 from jukebox.utils.io import get_duration_sec, load_audio
 from jukebox.data.labels import Labeller
+import pandas as pd
+import re
 
 class FilesAudioDataset(Dataset):
-    def __init__(self, hps):
+    def __init__(self, hps, audio_database):
         super().__init__()
         self.sr = hps.sr
         self.channels = hps.channels
@@ -19,6 +21,7 @@ class FilesAudioDataset(Dataset):
         self.aug_shift = hps.aug_shift
         self.labels = hps.labels
         self.init_dataset(hps)
+        self.songs = pd.read_csv(audio_database, engine='python')
 
     def filter(self, files, durations):
         # Remove files too short or too long
@@ -82,7 +85,23 @@ class FilesAudioDataset(Dataset):
             example, ("unknown", "classical", "") could be a metadata for a
             piano piece.
         """
-        return 'Artist1', 'Genre1', ''
+        filename = filename.split('/')[-1]
+        filename = filename[::-1]
+        _, info = filename.split("_", 1)
+        artist, name = info.split(" - ", 1)
+        artist = artist[::-1]
+        name = name[::-1]
+        hits = self.songs[self.songs['Song Name'] == name]
+        song = hits[hits['Artist'] == artist]
+
+        if len(song) == 0:
+            return 'unknown', 'unknown', ''
+        else:
+            song = song.iloc[0]
+            artist = artist = '_'.join(artist.split())
+            genre = '_'.join(re.split(' |/', song["Genre(s)"])).lower()
+            return artist, genre, ''
+
 
     def get_song_chunk(self, index, offset, test=False):
         filename, total_length = self.files[index], self.durations[index]

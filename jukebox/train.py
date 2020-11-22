@@ -293,17 +293,24 @@ def train(model, orig_model, opt, shd, scalar, ema, logger, metrics, data_proces
 
 def run(hps="teeny", port=29500, **kwargs):
     from jukebox.utils.dist_utils import setup_dist_from_mpi
+
+    audio_database = kwargs['audio_database']
+    del kwargs['audio_database']
+
     #rank, local_rank, device = setup_dist_from_mpi(port=port)
-    rank, local_rank, device = 0, 0, 'cpu'
+    rank, local_rank, device = setup_dist_from_mpi(port=port)
+    print('device:', device)
     hps = setup_hparams(hps, kwargs)
     #hps.ngpus = dist.get_world_size()
     hps.ngpus = 0
     hps.nworkers = 0
     hps.argv = " ".join(sys.argv)
+
+    hps.bs_sample, hps.nworkers, hps.bs = 1, 1, 1
     hps.bs_sample = hps.nworkers = hps.bs
 
     # Setup dataset
-    data_processor = DataProcessor(hps)
+    data_processor = DataProcessor(hps, audio_database)
 
     # Setup models
     vqvae = make_vqvae(hps, device)
