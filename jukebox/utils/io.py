@@ -67,11 +67,12 @@ def load_midi(file, sr, offset, duration, dt=0.25):
         return int(t / dt)
 
     # Load full midi file
+    n_notes = 128
     midi_format = pretty_midi.PrettyMIDI(file)
     midi_duration = midi_format.get_end_time()
 
     # process midi file into velocities at [instruments, time, notes]
-    info = np.zeros((len(midi_format.instruments), int(midi_duration / dt) + 1, 200))
+    info = np.zeros((len(midi_format.instruments), int(midi_duration / dt) + 1, n_notes))
     for i, instrument in enumerate(midi_format.instruments):
         for note in instrument.notes:
             start = sec_to_idx(note.start)
@@ -85,11 +86,14 @@ def load_midi(file, sr, offset, duration, dt=0.25):
     # average out all instruments
     info = np.average(info, axis=0)
 
-    # get midi chunk
+    # convert duration and offset from mp3 to midi
     offset = sec_to_idx(offset / sr)  # convert mp3 offset to midi duration
     duration = sec_to_idx(duration / sr)  # convert mp3 duration to midi duration
 
-    chunk = info[offset: offset + duration]
+    # extract required chunk adding zeros to any missing info
+    chunk = np.zeros(duration, n_notes)
+    required_info = info[offset: offset + duration]
+    chunk[: required_info.shape[0]] = required_info
 
     return chunk
 
