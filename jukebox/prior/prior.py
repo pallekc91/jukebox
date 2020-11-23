@@ -309,7 +309,7 @@ class SimplePrior(nn.Module):
             prime_loss = t.tensor(0.0, device='cuda')
         return prime_loss
 
-    def z_forward(self, z, z_conds=[], y=None, fp16=False, get_preds=False, get_attn_weights=False):
+    def z_forward(self, z, z_conds=[], y=None, midi = None, fp16=False, get_preds=False, get_attn_weights=False):
         """
         Arguments:
             get_attn_weights (bool or set): Makes forward prop dump
@@ -325,7 +325,7 @@ class SimplePrior(nn.Module):
             prime = z[:,:self.n_tokens]
         if self.single_enc_dec:
             z, x_cond = self.prior_preprocess([prime, z], [None, x_cond])
-            (prime_loss, gen_loss), preds = self.prior(z, x_cond, y_cond, y=y, fp16=fp16, get_sep_loss=True, get_preds=get_preds)
+            (prime_loss, gen_loss), preds = self.prior(z, x_cond, y_cond, y=y, midi=midi, fp16=fp16, get_sep_loss=True, get_preds=get_preds)
         else:
             encoder_kv = self.get_encoder_kv(prime, fp16=fp16)
             prime_loss = self.get_prime_loss(encoder_kv, prime)
@@ -343,10 +343,10 @@ class SimplePrior(nn.Module):
         else:
             return loss, metrics
 
-    def forward(self, x, y=None, fp16=False, decode=False, get_preds=False):
+    def forward(self, x, y=None, midi=None, fp16=False, decode=False, get_preds=False):
         bs = x.shape[0]
         z, *z_conds = self.encode(x, bs_chunks=bs)
-        loss, metrics = self.z_forward(z=z, z_conds=z_conds, y=y, fp16=fp16, get_preds=get_preds)
+        loss, metrics = self.z_forward(z=z, z_conds=z_conds, y=y, midi=midi, fp16=fp16, get_preds=get_preds)
         if decode:
             x_out = self.decode([z, *z_conds])
         else:

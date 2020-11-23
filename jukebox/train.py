@@ -161,19 +161,20 @@ def evaluate(model, orig_model, logger, metrics, data_processor, hps):
     with t.no_grad():
         for i, x in logger.get_range(data_processor.test_loader):
             if isinstance(x, (tuple, list)):
-                x, y = x
+                x, y, midi = x
             else:
                 y = None
 
             x = x.to('cuda', non_blocking=True)
             if y is not None:
                 y = y.to('cuda', non_blocking=True)
+                midi = midi.to('cuda', non_blocking=True)
 
             x_in = x = audio_preprocess(x, hps)
             log_input_output = (i==0)
 
             if hps.prior:
-                forw_kwargs = dict(y=y, fp16=hps.fp16, decode=log_input_output)
+                forw_kwargs = dict(y=y, midi=midi, fp16=hps.fp16, decode=log_input_output)
             else:
                 forw_kwargs = dict(loss_fn=hps.loss_fn, hps=hps)
 

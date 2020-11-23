@@ -26,18 +26,11 @@ def split_chunks(length, chunk_size):
     assert sum(chunk_sizes) == length
     return chunk_sizes
 
-
-def get_midi_chunk(y_info) -> object:
-    # from Yousif
-
-    pass
-
-
 class MidiEmbedding(nn.Module):
     def __init__(self, out_shape):
         super().__init__()
         self.output_emb_width = out_shape
-        self.input_emb_width = 127  # should be the fixed size of number of notes in  midi
+        self.input_emb_width = 1  # should be the fixed size of number of notes in  midi
         self.down_t = 4  # number of conv+reset blocks you need in the encoder conv block
         self.stride_t = 3  # strides for conv
         self.width = 2048  # dimentions of the intermediate representation inside EncoderConvBlock
@@ -53,9 +46,8 @@ class MidiEmbedding(nn.Module):
                                           stride_t=self.stride_t, width=self.width, depth=self.depth,
                                           m_conv=self.m_conv)
 
-    def forward(self, y_info):
-        # you get y info, use that info to get the midi repr
-        x = get_midi_chunk(y_info)  # returns midi in the shape of batch_size, notes(channels), time
+    def forward(self, midi):
+        x = t.flatten(midi)
         x = self.encConv1d(x)
         return x
 
@@ -157,7 +149,7 @@ class ConditionalAutoregressive2D(nn.Module):
             return x.view(N, -1)
 
     def forward(self, x, x_cond=None, y_cond=None, encoder_kv=None, fp16=False, loss_full=False, y=None,
-                encode=False, get_preds=False, get_acts=False, get_sep_loss=False):
+                midi=None, encode=False, get_preds=False, get_acts=False, get_sep_loss=False):
         # Preprocess.
         with t.no_grad():
             x = self.preprocess(x)
@@ -188,9 +180,10 @@ class ConditionalAutoregressive2D(nn.Module):
         else:
             x[:, 0] = self.start_token
 
-        # TODO: Add the midi_cond to the x
-        assert y is not None, 'Y is none, cant embed midi'
-        midi_cond = self.midi_emb(y)
+        # adding midi conditioning
+        if y:
+            midi_cond = self.midi_emb(midi)
+            x = x + midi_cond
 
         x = self.x_emb_dropout(x) + self.pos_emb_dropout(self.pos_emb()) + x_cond  # Pos emb and dropout
 

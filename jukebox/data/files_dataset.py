@@ -132,7 +132,7 @@ class FilesAudioDataset(Dataset):
         if self.labels:
             artist, genre, lyrics = self.get_metadata(filename, test)
             labels = self.labeller.get_label(artist, genre, lyrics, total_length, offset)
-            return data.T, labels['y']
+            return data.T, labels['y'], self.get_midi_chunk(index, offset)
         else:
             return data.T
 
@@ -146,8 +146,7 @@ class FilesAudioDataset(Dataset):
     def __getitem__(self, item):
         return self.get_item(item)
 
-    def get_midi_chunk(self, item):
-        index, offset = self.get_index_offset(item)
+    def get_midi_chunk(self, index, offset):
         filename, total_length = self.files[index], self.durations[index]
         filename = os.path.split(filename)[1]
         info = filename[:-18][::-1]
