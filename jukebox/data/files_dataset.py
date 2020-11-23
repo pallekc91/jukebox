@@ -149,18 +149,17 @@ class FilesAudioDataset(Dataset):
     def get_midi_chunk(self, item):
         index, offset = self.get_index_offset(item)
         filename, total_length = self.files[index], self.durations[index]
-
+        filename = os.path.split(filename)[1]
         info = filename[:-18][::-1]
         artist, song = info.split(" - ", 1)
 
         artist = '_'.join(artist[::-1].lower().split())
         song = '_'.join(song[::-1].lower().split())
-
         midi_path = self.midi_paths[artist + ' - ' + song]
 
-        print('acc', filename)
-        print('midi', midi_path)
-
+        if not os.path.exists(midi_path):
+            print(filename)
+            raise RuntimeError("IT FAILED")
         return load_midi(midi_path, sr=self.sr, offset=offset, duration=self.sample_length)
 
 
