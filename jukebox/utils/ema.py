@@ -1,7 +1,6 @@
 import torch
 from torch._utils import _flatten_dense_tensors
 import numpy as np
-
 # EMA always in float, as accumulation needs lots of bits
 class EMA:
     def __init__(self, params, mu=0.999):

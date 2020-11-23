@@ -28,7 +28,7 @@ def calculate_bandwidth(dataset, hps, duration=600):
     while n_seen < n_samples:
         x = dataset[idx]
         if isinstance(x, (tuple, list)):
-            x, y = x
+            x, y, midi = x
         samples = x.astype(np.float64)
         stft = librosa.core.stft(np.mean(samples, axis=1), hps.n_fft, hop_length=hps.hop_length, win_length=hps.window_size)
         spec = np.absolute(stft)
