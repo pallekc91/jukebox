@@ -28,7 +28,7 @@ def run(hps="teeny", port=29500, **kwargs):
     print("midi chunk call")
     for idx in range(8868):
         chunk = data_processor.dataset.get_midi_chunk(idx)
-        if chunk.shape != (95, 200):
+        if chunk.shape != (95, 128):
             print(chunk.shape)
             raise RuntimeError('It failed')
 

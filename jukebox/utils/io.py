@@ -91,7 +91,7 @@ def load_midi(file, sr, offset, duration, dt=0.25):
     duration = sec_to_idx(duration / sr)  # convert mp3 duration to midi duration
 
     # extract required chunk adding zeros to any missing info
-    chunk = np.zeros(duration, n_notes)
+    chunk = np.zeros((duration, n_notes))
     required_info = info[offset: offset + duration]
     chunk[: required_info.shape[0]] = required_info
 
