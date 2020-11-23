@@ -294,20 +294,23 @@ def train(model, orig_model, opt, shd, scalar, ema, logger, metrics, data_proces
 def run(hps="teeny", port=29500, **kwargs):
     from jukebox.utils.dist_utils import setup_dist_from_mpi
 
+    # t.cuda.set_limit_lms(2000000000)
+    # print('Limit Settings:')
+    # print('Enabled', t.cuda.get_enabled_lms())
+    # print('Limit', t.cuda.get_limit_lms())
+    # print('Size', t.cuda.get_size_lms())
+
     audio_database = kwargs['audio_database']
     del kwargs['audio_database']
-
-    #rank, local_rank, device = setup_dist_from_mpi(port=port)
     rank, local_rank, device = setup_dist_from_mpi(port=port)
     print('device:', device)
     hps = setup_hparams(hps, kwargs)
-    #hps.ngpus = dist.get_world_size()
-    hps.ngpus = 0
-    hps.nworkers = 0
+    hps.ngpus = dist.get_world_size()
     hps.argv = " ".join(sys.argv)
 
-    hps.bs_sample, hps.nworkers, hps.bs = 1, 1, 1
-    hps.bs_sample = hps.nworkers = hps.bs
+    hps.bs_sample, hps.nworkers, hps.bs = 1, 0, 1
+
+    print('hps.nworkers', hps.nworkers)
 
     # Setup dataset
     data_processor = DataProcessor(hps, audio_database)
@@ -352,4 +355,5 @@ def run(hps="teeny", port=29500, **kwargs):
         dist.barrier()
 
 if __name__ == '__main__':
+    t.cuda.set_enabled_lms(True)
     fire.Fire(run)

@@ -1,13 +1,17 @@
-import librosa
 import math
-import numpy as np
-import jukebox.utils.dist_adapter as dist
-from torch.utils.data import Dataset
-from jukebox.utils.dist_utils import print_all
-from jukebox.utils.io import get_duration_sec, load_audio
-from jukebox.data.labels import Labeller
-import pandas as pd
+import os
 import re
+
+import librosa
+import numpy as np
+import pandas as pd
+
+from torch.utils.data import Dataset
+
+from jukebox.data.labels import Labeller
+from jukebox.utils.dist_utils import print_all
+from jukebox.utils.io import get_duration_sec, load_audio, load_midi
+
 
 class FilesAudioDataset(Dataset):
     def __init__(self, hps, audio_database):
@@ -22,6 +26,24 @@ class FilesAudioDataset(Dataset):
         self.labels = hps.labels
         self.init_dataset(hps)
         self.songs = pd.read_csv(audio_database, engine='python')
+
+        self.midi_paths = self.create_midi_paths(hps)
+
+    def create_midi_paths(self, hps):
+        base_dir, _ = os.path.split(hps.audio_files_dir)
+
+        midi_dir = os.path.join(base_dir, "midi_files/")
+        midi_paths = {}
+        for path, subdirs, files in os.walk(midi_dir):
+            for name in files:
+                dir, artist = os.path.split(path)
+
+                artist = '_'.join(artist.lower().split())
+                song = '_'.join(name[:-4].lower().split())
+
+                midi_paths[artist + ' - ' + song] = os.path.join(path, name)
+
+        return midi_paths
 
     def filter(self, files, durations):
         # Remove files too short or too long
@@ -42,7 +64,7 @@ class FilesAudioDataset(Dataset):
         # Load list of files and starts/durations
         files = librosa.util.find_files(f'{hps.audio_files_dir}', ['mp3', 'opus', 'm4a', 'aac', 'wav'])
         print_all(f"Found {len(files)} files. Getting durations")
-        #cache = dist.get_rank() % 8 == 0 if dist.is_available() else True
+        # cache = dist.get_rank() % 8 == 0 if dist.is_available() else True
         cache = True
         durations = np.array([get_duration_sec(file, cache=cache) * self.sr for file in files])  # Could be approximate
         self.filter(files, durations)
@@ -53,9 +75,9 @@ class FilesAudioDataset(Dataset):
     def get_index_offset(self, item):
         # For a given dataset item and shift, return song index and offset within song
         print('item:', item)
-        half_interval = self.sample_length//2
+        half_interval = self.sample_length // 2
         shift = np.random.randint(-half_interval, half_interval) if self.aug_shift else 0
-        offset = item * self.sample_length + shift # Note we centred shifts, so adding now
+        offset = item * self.sample_length + shift  # Note we centred shifts, so adding now
         midpoint = offset + half_interval
         print('item:', item)
         print('half_interval:', half_interval)
@@ -64,11 +86,11 @@ class FilesAudioDataset(Dataset):
         print('midpoint:', midpoint)
         assert 0 <= midpoint < self.cumsum[-1], f'Midpoint {midpoint} of item beyond total length {self.cumsum[-1]}'
         index = np.searchsorted(self.cumsum, midpoint)  # index <-> midpoint of interval lies in this song
-        start, end = self.cumsum[index - 1] if index > 0 else 0.0, self.cumsum[index] # start and end of current song
+        start, end = self.cumsum[index - 1] if index > 0 else 0.0, self.cumsum[index]  # start and end of current song
         assert start <= midpoint <= end, f"Midpoint {midpoint} not inside interval [{start}, {end}] for index {index}"
-        if offset > end - self.sample_length: # Going over song
+        if offset > end - self.sample_length:  # Going over song
             offset = max(start, offset - half_interval)  # Now should fit
-        elif offset < start: # Going under song
+        elif offset < start:  # Going under song
             offset = min(end - self.sample_length, offset + half_interval)  # Now should fit
         assert start <= offset <= end - self.sample_length, f"Offset {offset} not in [{start}, {end - self.sample_length}]. End: {end}, SL: {self.sample_length}, Index: {index}"
         offset = offset - start
@@ -102,11 +124,11 @@ class FilesAudioDataset(Dataset):
             genre = '_'.join(re.split(' |/', song["Genre(s)"])).lower()
             return artist, genre, ''
 
-
     def get_song_chunk(self, index, offset, test=False):
         filename, total_length = self.files[index], self.durations[index]
         data, sr = load_audio(filename, sr=self.sr, offset=offset, duration=self.sample_length)
-        assert data.shape == (self.channels, self.sample_length), f'Expected {(self.channels, self.sample_length)}, got {data.shape}'
+        assert data.shape == (
+            self.channels, self.sample_length), f'Expected {(self.channels, self.sample_length)}, got {data.shape}'
         if self.labels:
             artist, genre, lyrics = self.get_metadata(filename, test)
             labels = self.labeller.get_label(artist, genre, lyrics, total_length, offset)
@@ -123,3 +145,23 @@ class FilesAudioDataset(Dataset):
 
     def __getitem__(self, item):
         return self.get_item(item)
+
+    def get_midi_chunk(self, item):
+        index, offset = self.get_index_offset(item)
+        filename, total_length = self.files[index], self.durations[index]
+
+        info = filename[:-18][::-1]
+        artist, song = info.split(" - ", 1)
+
+        artist = '_'.join(artist[::-1].lower().split())
+        song = '_'.join(song[::-1].lower().split())
+
+        midi_path = self.midi_paths[artist + ' - ' + song]
+
+        print('acc', filename)
+        print('midi', midi_path)
+
+        return load_midi(midi_path, sr=self.sr, offset=offset, duration=self.sample_length)
+
+
+

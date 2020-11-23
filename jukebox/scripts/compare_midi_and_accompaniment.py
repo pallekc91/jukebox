@@ -2,7 +2,7 @@ import os
 import av
 import pretty_midi
 	
-base_dir = "/projectnb/textconv/jukebox/dataset/"
+base_dir = "/projectnb/textconv/jukebox/dataset/midi_files/"
 accompaniment_dir = os.path.join(base_dir, "accompaniment/")
 midi_dir = os.path.join(base_dir, "midi_files/")
 

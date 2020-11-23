@@ -4,11 +4,11 @@ import numpy as np
 
 
 dt = 0.25
-def sec_to_idx(t):
+def sec_to_idx(t, dt=0.25):
 	return int(t/dt)
 
 
-def load_midi(path):
+def load_midi(path, dt=0.25):
 	midi_format = pretty_midi.PrettyMIDI(path)
 
 	duration = midi_format.get_end_time()

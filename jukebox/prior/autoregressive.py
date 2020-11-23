@@ -26,15 +26,18 @@ def split_chunks(length, chunk_size):
     assert sum(chunk_sizes) == length
     return chunk_sizes
 
+
 def get_midi_chunk(y_info) -> object:
-    #from Yousif
+    # from Yousif
+
     pass
+
 
 class MidiEmbedding(nn.Module):
     def __init__(self, out_shape):
         super().__init__()
         self.output_emb_width = out_shape
-        self.input_emb_width = 127  #should be the fixed size of number of notes in  midi
+        self.input_emb_width = 127  # should be the fixed size of number of notes in  midi
         self.down_t = 4  # number of conv+reset blocks you need in the encoder conv block
         self.stride_t = 3  # strides for conv
         self.width = 2048  # dimentions of the intermediate representation inside EncoderConvBlock
@@ -44,16 +47,18 @@ class MidiEmbedding(nn.Module):
         # before sending it to encoder conv bloc
         # have a 2D conv to convert the 2D midi to 1D dimension
 
-        #send it to enc conv block, input_emb_width is always 1
+        # send it to enc conv block, input_emb_width is always 1
         self.encConv1d = EncoderConvBlock(input_emb_width=self.input_emb_width, output_emb_width=self.output_emb_width,
-                                     down_t=self.down_t,
-                                     stride_t=self.stride_t, width=self.width, depth=self.depth, m_conv=self.m_conv)
+                                          down_t=self.down_t,
+                                          stride_t=self.stride_t, width=self.width, depth=self.depth,
+                                          m_conv=self.m_conv)
 
     def forward(self, y_info):
         # you get y info, use that info to get the midi repr
-        x = get_midi_chunk(y_info) # returns midi in the shape of batch_size, notes(channels), time
+        x = get_midi_chunk(y_info)  # returns midi in the shape of batch_size, notes(channels), time
         x = self.encConv1d(x)
         return x
+
 
 class PositionEmbedding(nn.Module):
     def __init__(self, input_shape, width, init_scale=1.0, pos_init=False):
@@ -254,7 +259,7 @@ class ConditionalAutoregressive2D(nn.Module):
         if self.x_cond:
             assert x_cond is not None
             assert x_cond.shape == (N, D, self.width) or x_cond.shape == (
-            N, 1, self.width), f"Got {x_cond.shape}, expected ({N}, {D}/{1}, {self.width})"
+                N, 1, self.width), f"Got {x_cond.shape}, expected ({N}, {D}/{1}, {self.width})"
         else:
             assert x_cond is None
             x_cond = t.zeros((N, 1, self.width), dtype=t.float).cuda()
@@ -317,7 +322,7 @@ class ConditionalAutoregressive2D(nn.Module):
         if self.x_cond:
             assert x_cond is not None
             assert x_cond.shape == (N, D, self.width) or x_cond.shape == (
-            N, 1, self.width), f"Got {x_cond.shape}, expected ({N}, {D}/{1}, {self.width})"
+                N, 1, self.width), f"Got {x_cond.shape}, expected ({N}, {D}/{1}, {self.width})"
         else:
             assert x_cond is None
             x_cond = t.zeros((N, 1, self.width), dtype=t.float).cuda()
