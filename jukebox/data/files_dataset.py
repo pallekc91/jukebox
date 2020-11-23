@@ -124,7 +124,7 @@ class FilesAudioDataset(Dataset):
             genre = '_'.join(re.split(' |/', song["Genre(s)"])).lower()
             return artist, genre, ''
 
-    def get_song_chunk(self, index, offset, test=False):
+    def get_song_chunk(self, index, offset, item, test=False):
         filename, total_length = self.files[index], self.durations[index]
         data, sr = load_audio(filename, sr=self.sr, offset=offset, duration=self.sample_length)
         assert data.shape == (
@@ -132,13 +132,14 @@ class FilesAudioDataset(Dataset):
         if self.labels:
             artist, genre, lyrics = self.get_metadata(filename, test)
             labels = self.labeller.get_label(artist, genre, lyrics, total_length, offset)
+            labels['y'].append(item)
             return data.T, labels['y']
         else:
             return data.T
 
     def get_item(self, item, test=False):
         index, offset = self.get_index_offset(item)
-        return self.get_song_chunk(index, offset, test)
+        return self.get_song_chunk(index, offset, item, test)
 
     def __len__(self):
         return int(np.floor(self.cumsum[-1] / self.sample_length))
@@ -158,7 +159,6 @@ class FilesAudioDataset(Dataset):
         midi_path = self.midi_paths[artist + ' - ' + song]
 
         if not os.path.exists(midi_path):
-            print(filename)
             raise RuntimeError("IT FAILED")
         return load_midi(midi_path, sr=self.sr, offset=offset, duration=self.sample_length)
 
