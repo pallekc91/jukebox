@@ -242,7 +242,7 @@ class SimplePrior(nn.Module):
         x_cond = self.x_emb(z_conds) if self.x_cond else y_pos
         return x_cond, y_cond, prime
 
-    def sample(self, n_samples, z=None, z_conds=None, y=None, fp16=False, temp=1.0, top_k=0, top_p=0.0,
+    def sample(self, n_samples, midi =None, z=None, z_conds=None, y=None, fp16=False, temp=1.0, top_k=0, top_p=0.0,
                chunk_size=None, sample_tokens=None):
         N = n_samples
         if z is not None: assert z.shape[0] == N, f"Expected shape ({N},**), got shape {z.shape}"
@@ -267,7 +267,7 @@ class SimplePrior(nn.Module):
                     z, x_cond = self.prior_preprocess([prime, z], [None, x_cond])
                 if sample_tokens is not None:
                     sample_tokens += self.n_tokens
-                z = self.prior.primed_sample(n_samples, z, x_cond, y_cond, fp16=fp16, temp=temp,
+                z = self.prior.primed_sample(n_samples, z, x_cond, y_cond,midi=midi, fp16=fp16, temp=temp,
                                              top_k=top_k, top_p=top_p, chunk_size=chunk_size, sample_tokens=sample_tokens)
                 z = self.prior_postprocess(z)
             else:
@@ -276,7 +276,7 @@ class SimplePrior(nn.Module):
                     z = self.prior.sample(n_samples, x_cond, y_cond, encoder_kv, fp16=fp16, temp=temp, top_k=top_k,
                                           top_p=top_p, sample_tokens=sample_tokens)
                 else:
-                    z = self.prior.primed_sample(n_samples, z, x_cond, y_cond, encoder_kv, fp16=fp16, temp=temp,
+                    z = self.prior.primed_sample(n_samples, z, x_cond, y_cond, encoder_kv, midi=midi,  fp16=fp16, temp=temp,
                                              top_k=top_k, top_p=top_p, chunk_size=chunk_size, sample_tokens=sample_tokens)
             if sample_tokens is None:
                 assert_shape(z, (N, *self.z_shape))

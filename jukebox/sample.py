@@ -11,6 +11,7 @@ from jukebox.align import get_alignment
 from jukebox.save_html import save_html
 from jukebox.utils.sample_utils import split_batch, get_starts
 from jukebox.utils.dist_utils import print_once
+from jukebox.utils.io import load_sample_midi
 import fire
 
 # Sample a partial window of length<n_ctx with tokens_to_sample new tokens on level=level
@@ -66,7 +67,9 @@ def sample_single_window(zs, labels, sampling_kwargs, level, prior, start, hps):
     y_list = split_batch(y, n_samples, max_batch_size)
     z_samples = []
     for z_i, z_conds_i, y_i in zip(z_list, z_conds_list, y_list):
-        z_samples_i = prior.sample(n_samples=z_i.shape[0], z=z_i, z_conds=z_conds_i, y=y_i, **sampling_kwargs)
+        midi_path = r"C:\Users\Yousef\Desktop\UNiz\MidiDataset\Cleaned\acdc\Big Balls.mid"
+        midi = load_sample_midi(midi_path)
+        z_samples_i = prior.sample(n_samples=z_i.shape[0], z=z_i, z_conds=z_conds_i, y=y_i, **sampling_kwargs, midi=midi)
         z_samples.append(z_samples_i)
     z = t.cat(z_samples, dim=0)
 

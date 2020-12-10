@@ -52,7 +52,7 @@ vqvae = Hyperparams(
     depth = 4,
     m_conv = 1.0,
     dilation_growth_rate = 3,
-    restore_vqvae=f'gs://jukebox-assets/models/5b/vqvae.pth.tar',
+    restore_vqvae=f'C:/Users/Yousef/Desktop/Uni/BU/Masters Project/networks/vqvae.pth.tar',
 )
 HPARAMS_REGISTRY["vqvae"] = vqvae
 
@@ -115,7 +115,7 @@ prior_5b = Hyperparams(
     n_tokens=0,
     prime_loss_fraction=0.0,
     merged_decoder=True,
-    restore_prior='gs://jukebox-assets/models/5b/prior_level_2.pth.tar',
+    restore_prior=f'C:/Users/Yousef/Desktop/Uni/BU/Masters Project/networks/prior.pth.tar',
     fp16_params=True,
 )
 prior_5b.update(labels)
@@ -225,6 +225,7 @@ small_labelled_prior = Hyperparams(
     min_duration=60.0,
     max_duration=600.0,
     t_bins=64,
+    restore_prior=f'C:/Users/Yousef/Desktop/Uni/BU/Masters Project/networks/prior.pth.tar',
 )
 small_labelled_prior.update(small_prior)
 HPARAMS_REGISTRY["small_labelled_prior"] = small_labelled_prior

@@ -55,6 +55,7 @@ class MidiEmbedding(nn.Module):
 
     def forward(self, midi):
         x = midi.float().unsqueeze_(0)
+        print(x.shape)
         
         x = F.relu(self.conv1(x))
         x = self.pool(x)
@@ -257,7 +258,7 @@ class ConditionalAutoregressive2D(nn.Module):
         assert x.shape == (n_samples, 1, self.width)
         return x, cond
 
-    def sample(self, n_samples, x_cond=None, y_cond=None, encoder_kv=None, fp16=False, temp=1.0, top_k=0, top_p=0.0,
+    def sample(self, n_samples, midi=None,  x_cond=None, y_cond=None, encoder_kv=None, fp16=False, temp=1.0, top_k=0, top_p=0.0,
                get_preds=False, sample_tokens=None):
         assert self.training == False
 
@@ -284,6 +285,8 @@ class ConditionalAutoregressive2D(nn.Module):
             for sample_t in get_range(range(0, sample_tokens)):
                 x, cond = self.get_emb(sample_t, n_samples, x, x_cond, y_cond)
                 self.transformer.check_cache(n_samples, sample_t, fp16)
+                midi_cond = self.midi_emb(midi)
+                x = x + midi_cond
                 x = self.transformer(x, encoder_kv=encoder_kv, sample=True, fp16=fp16)  # Transformer
                 if self.add_cond_after_transformer:
                     x = x + cond
@@ -310,7 +313,7 @@ class ConditionalAutoregressive2D(nn.Module):
         else:
             return x
 
-    def primed_sample(self, n_samples, x, x_cond=None, y_cond=None, encoder_kv=None, fp16=False, temp=1.0, top_k=0,
+    def primed_sample(self, n_samples, x, midi=None, x_cond=None, y_cond=None, encoder_kv=None, fp16=False, temp=1.0, top_k=0,
                       top_p=0.0, get_preds=False, chunk_size=None, sample_tokens=None):
         assert self.training == False
 
@@ -367,6 +370,8 @@ class ConditionalAutoregressive2D(nn.Module):
                 assert cond_prime.shape == (n_samples, current_chunk_size, self.width)
                 del xs_prime
                 del conds_prime
+                midi_cond = self.midi_emb(midi)
+                x_prime = x_prime + midi_cond
                 if not get_preds:
                     del cond_prime
                 x_prime = self.transformer(x_prime, encoder_kv=encoder_kv, sample=True, fp16=fp16)

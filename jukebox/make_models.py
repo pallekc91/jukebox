@@ -18,6 +18,7 @@ MODELS = {
     '5b': ("vqvae", "upsampler_level_0", "upsampler_level_1", "prior_5b"),
     '5b_lyrics': ("vqvae", "upsampler_level_0", "upsampler_level_1", "prior_5b_lyrics"),
     '1b_lyrics': ("vqvae", "upsampler_level_0", "upsampler_level_1", "prior_1b_lyrics"),
+    'my_model' : {'vqvae', "upsampler_level_0", "upsampler_level_1", 'small_labelled_prior'}
     #'your_model': ("you_vqvae_here", "your_upsampler_here", ..., "you_top_level_prior_here")
 }
 
