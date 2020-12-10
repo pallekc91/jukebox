@@ -329,7 +329,7 @@ class SimplePrior(nn.Module):
         else:
             encoder_kv = self.get_encoder_kv(prime, fp16=fp16)
             prime_loss = self.get_prime_loss(encoder_kv, prime)
-            gen_loss, preds = self.prior(z, x_cond, y_cond, encoder_kv, y=y, fp16=fp16, get_preds=get_preds)
+            gen_loss, preds = self.prior(z, x_cond, y_cond, encoder_kv, y=y, fp16=fp16, get_preds=get_preds, midi=midi)
         loss = (self.prime_loss_fraction*prime_loss*self.prime_loss_dims/self.total_loss_dims) + \
                    (gen_loss*self.gen_loss_dims/self.total_loss_dims)
         metrics=dict(bpd=gen_loss.clone().detach(), prime_loss=prime_loss.clone().detach(),

@@ -74,16 +74,17 @@ class FilesAudioDataset(Dataset):
 
     def get_index_offset(self, item):
         # For a given dataset item and shift, return song index and offset within song
-        print('item:', item)
+        #print('item:', item)
         half_interval = self.sample_length // 2
         shift = np.random.randint(-half_interval, half_interval) if self.aug_shift else 0
+        #print(item)
         offset = item * self.sample_length + shift  # Note we centred shifts, so adding now
         midpoint = offset + half_interval
-        print('item:', item)
-        print('half_interval:', half_interval)
-        print('shift:', shift)
-        print('offset:', offset)
-        print('midpoint:', midpoint)
+        #print('item:', item)
+        #print('half_interval:', half_interval)
+        #print('shift:', shift)
+        #print('offset:', offset)
+        #print('midpoint:', midpoint)
         assert 0 <= midpoint < self.cumsum[-1], f'Midpoint {midpoint} of item beyond total length {self.cumsum[-1]}'
         index = np.searchsorted(self.cumsum, midpoint)  # index <-> midpoint of interval lies in this song
         start, end = self.cumsum[index - 1] if index > 0 else 0.0, self.cumsum[index]  # start and end of current song
@@ -132,7 +133,8 @@ class FilesAudioDataset(Dataset):
         if self.labels:
             artist, genre, lyrics = self.get_metadata(filename, test)
             labels = self.labeller.get_label(artist, genre, lyrics, total_length, offset)
-            return data.T, labels['y'], self.get_midi_chunk(index, offset)
+            midi = self.get_midi_chunk(index, offset)
+            return (data.T, labels['y'], midi)
         else:
             return data.T
 

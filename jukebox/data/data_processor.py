@@ -20,7 +20,7 @@ class OffsetDataset(Dataset):
 
     def __getitem__(self, item):
         #HACK
-        return self.dataset.get_item([self.start] + item, test=self.test)
+        return self.dataset.get_item(self.start + item[0], test=self.test)
 
 class DataProcessor():
     def __init__(self, hps, audio_database):
@@ -53,17 +53,17 @@ class DataProcessor():
     def create_data_loaders(self, hps):
         # Loader to load mini-batches
         if hps.labels:
-            collate_fn = lambda batch: tuple(t.stack([t.from_numpy(b[i]) for b in batch], 0) for i in range(2))
+            collate_fn = lambda batch: tuple(t.stack([t.from_numpy(b[i]) for b in batch], 0) for i in range(3))
         else:
             collate_fn = lambda batch: t.stack([t.from_numpy(b) for b in batch], 0)
 
-        print('Creating Data Loader')
         self.train_loader = DataLoader(self.train_dataset, batch_size=hps.bs, num_workers=hps.nworkers,
                                        sampler=self.train_sampler, pin_memory=False,
                                        drop_last=True, collate_fn=collate_fn)
         self.test_loader = DataLoader(self.test_dataset, batch_size=hps.bs, num_workers=hps.nworkers,
                                       sampler=self.test_sampler, pin_memory=False,
                                       drop_last=False, collate_fn=collate_fn)
+        
 
     def print_stats(self, hps):
         print_all(f"Train {len(self.train_dataset)} samples. Test {len(self.test_dataset)} samples")

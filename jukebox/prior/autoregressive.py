@@ -30,25 +30,45 @@ class MidiEmbedding(nn.Module):
     def __init__(self, out_shape):
         super().__init__()
         self.output_emb_width = out_shape
-        self.input_emb_width = 1  # should be the fixed size of number of notes in  midi
-        self.down_t = 4  # number of conv+reset blocks you need in the encoder conv block
-        self.stride_t = 3  # strides for conv
-        self.width = 2048  # dimentions of the intermediate representation inside EncoderConvBlock
-        self.depth = 48  # depth of the intermediate representation inside EncoderConvBlock
-        self.m_conv = 1.0  # keeping it default, its a parameter for resent
-        # thing to remember is this is a 1d conv thats happening. So its important to flatten the input
-        # before sending it to encoder conv bloc
-        # have a 2D conv to convert the 2D midi to 1D dimension
+        #self.input_emb_width = 95 * 128  # should be the fixed size of number of notes in  midi
+        #self.down_t = 2  # number of conv+reset blocks you need in the encoder conv block
+        #self.stride_t = 1  #128/2 # strides for conv
+        #self.width = 1024  # dimentions of the intermediate representation inside EncoderConvBlock
+        #self.depth = 64  # depth of the intermediate representation inside EncoderConvBlock
+        #self.m_conv = 1.0  # keeping it default, its a parameter for resent
+        ## thing to remember is this is a 1d conv thats happening. So its important to flatten the input
+        ## before sending it to encoder conv bloc
+        ## have a 2D conv to convert the 2D midi to 1D dimension
 
-        # send it to enc conv block, input_emb_width is always 1
-        self.encConv1d = EncoderConvBlock(input_emb_width=self.input_emb_width, output_emb_width=self.output_emb_width,
-                                          down_t=self.down_t,
-                                          stride_t=self.stride_t, width=self.width, depth=self.depth,
-                                          m_conv=self.m_conv)
+        ## send it to enc conv block, input_emb_width is always 1
+        #self.encConv1d = EncoderConvBlock(input_emb_width=self.input_emb_width, output_emb_width=self.output_emb_width,
+        #                                  down_t=self.down_t,
+        #                                  stride_t=self.stride_t, width=self.width, depth=self.depth,
+        #                                  m_conv=self.m_conv)
+        self.conv1 = nn.Conv2d(1, 64, 3, stride=2)
+        self.conv2 = nn.Conv2d(64, 128, 3, stride=2)
+
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.lin1 = nn.Linear(128 * 5 * 7, 512)
+        self.lin2 = nn.Linear(512, 1024)
 
     def forward(self, midi):
-        x = t.flatten(midi)
-        x = self.encConv1d(x)
+        x = midi.float().unsqueeze_(0)
+        
+        x = F.relu(self.conv1(x))
+        x = self.pool(x)
+
+        x = F.relu(self.conv2(x))
+        x = self.pool(x)
+
+        x = x.view(-1, 128 * 5 * 7)
+        x = self.lin1(x)
+        x = self.lin2(x)        
+        
+        #x = t.flatten(midi.float())
+        #x = self.encConv1d(x)
+        #x = self.boring_solution(x)
         return x
 
 
@@ -181,7 +201,7 @@ class ConditionalAutoregressive2D(nn.Module):
             x[:, 0] = self.start_token
 
         # adding midi conditioning
-        if y:
+        if y is not None:
             midi_cond = self.midi_emb(midi)
             x = x + midi_cond
 

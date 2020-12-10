@@ -3,6 +3,7 @@ Ability to train vq-vae and prior
 First try for random inputs
 Then from maestros
 """
+print('Importing')
 import sys
 import fire
 import warnings
@@ -10,6 +11,7 @@ import numpy as np
 import torch as t
 import jukebox.utils.dist_adapter as dist
 from torch.nn.parallel import DistributedDataParallel
+print('Half')
 
 from jukebox.hparams import setup_hparams
 from jukebox.make_models import make_vqvae, make_prior, restore_opt, save_checkpoint
@@ -20,6 +22,7 @@ from jukebox.utils.dist_utils import print_once, allreduce, allgather
 from jukebox.utils.ema import CPUEMA, FusedEMA, EMA
 from jukebox.utils.fp16 import FP16FusedAdam, FusedAdam, LossScalar, clipped_grad_scale, backward
 from jukebox.data.data_processor import DataProcessor
+print('done importing')
 
 def prepare_aud(x, hps):
     x = audio_postprocess(x.detach().contiguous(), hps)
@@ -162,6 +165,7 @@ def evaluate(model, orig_model, logger, metrics, data_processor, hps):
         for i, x in logger.get_range(data_processor.test_loader):
             if isinstance(x, (tuple, list)):
                 x, y, midi = x
+                #print('midi', midi)
             else:
                 y = None
 
@@ -211,19 +215,20 @@ def train(model, orig_model, opt, shd, scalar, ema, logger, metrics, data_proces
 
     for i, x in logger.get_range(data_processor.train_loader):
         if isinstance(x, (tuple, list)):
-            x, y = x
+            x, y, midi = x
         else:
             y = None
 
         x = x.to('cuda', non_blocking=True)
         if y is not None:
             y = y.to('cuda', non_blocking=True)
+            midi = midi.to('cuda', non_blocking=True)
 
         x_in = x = audio_preprocess(x, hps)
         log_input_output = (logger.iters % hps.save_iters == 0)
 
         if hps.prior:
-            forw_kwargs = dict(y=y, fp16=hps.fp16, decode=log_input_output)
+            forw_kwargs = dict(y=y, midi=midi, fp16=hps.fp16, decode=log_input_output)
         else:
             forw_kwargs = dict(loss_fn=hps.loss_fn, hps=hps)
 
